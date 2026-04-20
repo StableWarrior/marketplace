@@ -1,9 +1,10 @@
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.ports.repositories import UserRepository
 from src.domain.entities import User
 from src.infrastructure.persistence.models import UserModel
+from src.application.exceptions import UserNotFoundError
 
 
 class SQLAlchemyUserRepository(UserRepository):
@@ -17,7 +18,13 @@ class SQLAlchemyUserRepository(UserRepository):
         return _to_entity(model)
 
     async def get_by_id(self, user_id: int) -> User | None:
-        raise NotImplementedError
+        result = await self._session.execute(select(UserModel).where(UserModel.id == user_id))
+        user_model = result.scalar_one_or_none()
+
+        if user_model is None:
+            return None
+
+        return _to_entity(user_model)
 
     async def get_by_email(self, email: str) -> User | None:
         result = await self._session.execute(
@@ -29,7 +36,17 @@ class SQLAlchemyUserRepository(UserRepository):
         return _to_entity(model)
 
     async def delete(self, user_id: int) -> bool:
-        raise NotImplementedError
+        result = await self._session.execute(
+            delete(UserModel)
+            .where(UserModel.id == user_id)
+            .returning(UserModel.id)
+        )
+        deleted_id = result.scalar_one_or_none()
+
+        if deleted_id is None:
+            return False
+
+        return True
 
 
 def _to_entity(model: UserModel) -> User:
